@@ -21,11 +21,6 @@ waitqueue *head = NULL; // 指向就绪队列的头结点
 
 bool time_to_schedule_jobs = false;
 
-// 初始化作业调度程序
-void scheduler_init() {
-    // 初始化就绪队列
-    waitqueue *head = NULL;
-}
 
 void sigchld_handler(int signum) {
     pid_t pid;
@@ -54,14 +49,14 @@ void sigchld_handler(int signum) {
 }
 
 void switch_job(pid_t current_pid, pid_t new_pid) {
-    // 停止当前作业
-    kill(current_pid, SIGSTOP);
+    // // 停止当前作业
+    // kill(current_pid, SIGSTOP);
 
-    // 如果新的作业具有更高优先级，启动它
-    if (new_pid != -1) {
-        // 开始新的作业
-        kill(new_pid, SIGCONT);
-    }
+    // // 如果新的作业具有更高优先级，启动它
+    // if (new_pid != -1) {
+    //     // 开始新的作业
+    //     kill(new_pid, SIGCONT);
+    // }
 }
 
 void create_FIFO(const char *filename) {
@@ -86,11 +81,12 @@ static int generate_unique_jid() {
 // 提交新作业
 int scheduler_enq(jobcmd *cmd) {
     // 创建新进程
-    pid_t pid = fork();
-    if (pid < 0) {
-        perror("Failed to fork");
-        exit(EXIT_FAILURE);
-    }
+    // pid_t pid = fork();
+    pid_t pid = 1;
+    // if (pid < 0) {
+    //     perror("Failed to fork");
+    //     exit(EXIT_FAILURE);
+    // }
 
     // 父进程处理
     if (pid > 0) {
@@ -139,8 +135,8 @@ void scheduler_stat() {
         long wait_time_in_seconds = difftime(time(NULL), job->create_time);
         
         // 打印作业信息
-        printf("PID: %d, Username: %s, Execution Time: %ld, Wait Time: %ld, Creation Time: %s, State: %s\n",
-               job->pid, username,
+        printf("JID: %d, Username: %s, Execution Time: %ld, Wait Time: %ld, Creation Time: %s, State: %s\n",
+               job->jid, username,
                (long) job->run_time, wait_time_in_seconds,
                ctime(&job->create_time),
                job->state == READY ? "READY" : "RUNNING");
@@ -153,8 +149,20 @@ void scheduler_stat() {
 int scheduler_deq(int jid) {
     // 从就绪队列头部开始查找作业
     waitqueue *current_node = head;
-    waitqueue *prev_node = NULL;
-    while (current_node) {
+    if(head->job->jid == jid){
+        waitqueue* new_head = head->next;
+        if (current_node->job->state == RUNNING) {
+                // 发送SIGTERM信号中止作业
+                kill(current_node->job->pid, SIGTERM);
+        }
+        free(current_node->job);
+        free(current_node);
+        head = new_head;
+        return 1;
+    }
+    waitqueue *prev_node = NULL; // 初始化prev_node为head
+    while (current_node != NULL) {
+        printf("jid : %d\n", current_node->job->jid);
         if (current_node->job->jid == jid) {
             // 找到作业，检查是否在运行
             if (current_node->job->state == RUNNING) {
@@ -165,9 +173,9 @@ int scheduler_deq(int jid) {
             // 移除队列中的作业节点
             if (current_node->next) {
                 prev_node->next = current_node->next;
-            } else {
-                // 如果是最后一个节点，更新头节点
-                head = current_node->next;
+            }
+            else{
+                prev_node->next = NULL;
             }
 
             // 释放作业信息
@@ -176,6 +184,7 @@ int scheduler_deq(int jid) {
 
             return 1; // 成功删除
         }
+        prev_node = current_node;
         current_node = current_node->next;
     }
 
@@ -185,6 +194,7 @@ int scheduler_deq(int jid) {
 // 调度函数
 void schedule() {
     // 如果就绪队列为空，无需调度
+    // printf("here!");
     read_from_fifo(FIFO_NAME);
     if (head == NULL) {
         return;
@@ -223,6 +233,7 @@ void schedule() {
 
 int read_from_fifo(const char* fifo_name) {
     // 从FIFO中读一次
+    printf("read\n");
     int fifo_fd;
     jobcmd cmd;
     int has_command = 0;
@@ -231,36 +242,37 @@ int read_from_fifo(const char* fifo_name) {
         perror("Failed to open FIFO");
         exit(EXIT_FAILURE);
     }
-
-    ssize_t bytes_read = read(fifo_fd, &cmd, sizeof(cmd));
-    if (bytes_read > 0) {
-        printf("Read from FIFO: %s\n", cmd.data);
-        has_command = 1;
-    } else if (bytes_read == 0) {
-        printf("End of FIFO reached.\n");
-    } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        // 没有数据可读，稍后再试
-        sleep(1);
-    } else {
-        perror("Read error from FIFO");
-    }
-    // 有命令就处理命令
-    if(has_command){
-        switch(cmd.type){
-            case ENQ:
-                scheduler_enq(&cmd);
-                break;
-            case DEQ:
-                scheduler_deq(cmd.defpri); // 储存了jid
-                break;
-            case STAT:
-                scheduler_stat();
-                break;
-            default:
-                printf("Invalid command\n");
-                break;
+        ssize_t bytes_read = read(fifo_fd, &cmd, sizeof(cmd));
+        if (bytes_read > 0) {
+            printf("Read from FIFO: %d\n", cmd.type);
+            has_command = 1;
+        } else if (bytes_read == 0) {
+            // printf("End of FIFO reached.\n");
+        } else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            // 没有数据可读，稍后再试
+            sleep(1);
+        } else {
+            perror("Read error from FIFO");
         }
-    }
+        // 有命令就处理命令
+        if(has_command){
+            switch(cmd.type){
+                case ENQ:
+                    printf("%s\n", "enq");
+                    scheduler_enq(&cmd);
+                    break;
+                case DEQ:
+                    printf("%s\n", "deq");
+                    scheduler_deq(cmd.defpri); // 储存了jid
+                    break;
+                case STAT:
+                    scheduler_stat();
+                    break;
+                default:
+                    printf("Invalid command\n");
+                    break;
+            }
+        }
     close(fifo_fd);
     return has_command;
 }
@@ -268,10 +280,10 @@ int read_from_fifo(const char* fifo_name) {
 // 注册SIGALRM信号处理器
 void alarm_handler(int signum) {
     // 每次时间片到期就调度一次
+    // printf("alarm handler\n");
     schedule();
 }
 int main() {
-    scheduler_init();
     // 注册信号处理函数,时间片耗尽通知进程
     signal(SIGALRM, alarm_handler);
     // 设置定时器参数，时间片10毫秒

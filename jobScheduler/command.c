@@ -104,6 +104,7 @@ void write_to_fifo() {
                 strcat(cmd.data, " "); // 添加空格分隔参数
                 strcat(cmd.data, args[cmd.argnum++]);
             }
+            printf("finished !");
         } else if (strcmp(args[0], "deq") == 0) {
             cmd.type = DEQ;
             if (strlen(args[1]) > 0) {
@@ -120,13 +121,12 @@ void write_to_fifo() {
         }
 
         // 打开FIFO进行写操作
-        printf("here!\n");
+        printf("writing here!\n");
         fifo_fd = open(FIFO_NAME, O_WRONLY);
         if (fifo_fd == -1) {
             perror("Failed to open FIFO for writing");
             exit(EXIT_FAILURE);
         }
-        printf("here!\n");
         // 写入jobcmd结构体到FIFO
         // 增加时间调试信息
         ssize_t bytes_written = write(fifo_fd, &cmd, sizeof(cmd));
@@ -135,7 +135,7 @@ void write_to_fifo() {
             close(fifo_fd);
             exit(EXIT_FAILURE);
         }
-        printf("here!\n");
+        printf("finish writing\n");
         // 关闭FIFO
         close(fifo_fd);
     }
