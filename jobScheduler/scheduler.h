@@ -16,7 +16,8 @@
 
 #define BUFLEN 1024  // 命令缓冲区长度
 #define READY_QUEUE_SIZE 100  // 就绪队列大小
-
+#define max_priority 3
+#define time_slice 10 // 10 毫秒
 #define FIFO_NAME "/tmp/myfifo"
 
 enum jobstate {
