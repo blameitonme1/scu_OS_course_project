@@ -72,6 +72,12 @@ void create_FIFO(const char *filename) {
     }
 }
 
+// 解析 cmd.data 并返回可执行文件路径
+char* extractExecutablePath(char* data) {
+    char* token = strtok(data, " ");
+    return token;
+}
+
 // 生成唯一的作业ID
 static int generate_unique_jid() {
     static int last_jid = 1;
@@ -81,16 +87,17 @@ static int generate_unique_jid() {
 // 提交新作业
 int scheduler_enq(jobcmd *cmd) {
     // 创建新进程
-    // pid_t pid = fork();
-    pid_t pid = 1;
-    // if (pid < 0) {
-    //     perror("Failed to fork");
-    //     exit(EXIT_FAILURE);
-    // }
+    pid_t pid = fork();
+    // pid_t pid = 1;
+    if (pid < 0) {
+        perror("Failed to fork");
+        exit(EXIT_FAILURE);
+    }
 
     // 父进程处理
     if (pid > 0) {
         // 将作业信息添加到就绪队列
+        printf("Father!\n");
         jobinfo *new_job = malloc(sizeof(jobinfo));
 
         new_job->jid = generate_unique_jid(); // 为作业分配唯一 ID
@@ -116,7 +123,16 @@ int scheduler_enq(jobcmd *cmd) {
         return new_job->jid;
     } else {
         // 子进程执行作业
-        _exit(EXIT_SUCCESS); // 子进程结束
+        printf("Son!\n");
+        char* executable_path = extractExecutablePath(cmd->data);
+        printf("Executable path: %s\n", executable_path);
+        sleep(30);
+        if(execl(executable_path, executable_path, NULL) == -1){
+            perror("Failed to execute the command");
+            _exit(EXIT_FAILURE);
+        }
+        else
+        _exit(EXIT_SUCCESS);
     }
 }
 
@@ -280,7 +296,6 @@ int read_from_fifo(const char* fifo_name) {
 // 注册SIGALRM信号处理器
 void alarm_handler(int signum) {
     // 每次时间片到期就调度一次
-    // printf("alarm handler\n");
     schedule();
 }
 int main() {
